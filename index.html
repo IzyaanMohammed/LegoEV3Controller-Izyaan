@@ -1,25 +1,31 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>EV3 A+D Controller</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T10 EV3 Controller</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        body { text-align: center; font-family: sans-serif; background: #222; color: white; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; width: 300px; margin: auto; }
-        button { width: 90px; height: 90px; font-size: 16px; font-weight: bold; border-radius: 10px; border: none; background: #444; color: white; touch-action: manipulation; }
-        button:active { background: #00ff00; color: black; }
-        #conn { background: #007bff; width: 200px; height: 50px; margin-bottom: 20px; }
+        body { text-align: center; font-family: sans-serif; background: #1a1a1a; color: #00ff00; margin: 0; overflow: hidden; }
+        h2 { margin-top: 20px; text-shadow: 0 0 10px #00ff00; }
+        .status-bar { margin: 10px; font-size: 14px; color: #aaa; }
+        #conn { background: #008cff; color: white; border: none; padding: 15px 30px; font-size: 18px; border-radius: 50px; cursor: pointer; box-shadow: 0 4px #005bb5; margin-bottom: 30px; }
+        #conn.active { background: #28a745; box-shadow: 0 4px #1e7e34; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; width: 280px; margin: auto; }
+        .btn { width: 80px; height: 80px; background: #333; border: 2px solid #00ff00; color: #00ff00; font-size: 20px; font-weight: bold; border-radius: 15px; display: flex; align-items: center; justify-content: center; user-select: none; -webkit-user-select: none; }
+        .btn:active { background: #00ff00; color: black; }
+        .label { grid-column: span 3; color: #888; font-size: 12px; margin-top: 10px; }
     </style>
 </head>
 <body>
-    <h1>EV3 A+D Remote</h1>
-    <button id="conn" onclick="connect()">CONNECT TO EV3</button>
+    <h2>ROBOT T10</h2>
+    <div class="status-bar">Target: Motor A (Right) + Motor D (Left)</div>
+    <button id="conn" onclick="connect()">CONNECT T10</button>
 
     <div class="grid">
-        <div></div><button onpointerdown="move(50,50)" onpointerup="stop()">FWD</button><div></div>
-        <button onpointerdown="move(-40,40)" onpointerup="stop()">LEFT</button>
-        <button onpointerdown="move(-50,-50)" onpointerup="stop()">BACK</button>
-        <button onpointerdown="move(40,-40)" onpointerup="stop()">RIGHT</button>
+        <div></div><div class="btn" onpointerdown="drive(50,50)" onpointerup="stop()">↑</div><div></div>
+        <div class="btn" onpointerdown="drive(-40,40)" onpointerup="stop()">←</div>
+        <div class="btn" onpointerdown="drive(-50,-50)" onpointerup="stop()">↓</div>
+        <div class="btn" onpointerdown="drive(40,-40)" onpointerup="stop()">→</div>
+        <div class="label">Bluetooth Classic | Web Serial Mode</div>
     </div>
 
     <script>
@@ -27,37 +33,41 @@
 
         async function connect() {
             try {
-                port = await navigator.serial.requestPort();
+                // Request port with standard Bluetooth Serial UUID
+                port = await navigator.serial.requestPort({
+                    filters: [{ bluetoothServiceClassId: "00001101-0000-1000-8000-00805f9b34fb" }]
+                });
                 await port.open({ baudRate: 9600 });
                 writer = port.writable.getWriter();
-                document.getElementById('conn').innerText = "CONNECTED";
-                document.getElementById('conn').style.background = "#28a745";
-            } catch (e) { alert("Use Chrome (Android) or Bluefy (iOS)"); }
+                const btn = document.getElementById('conn');
+                btn.innerText = "T10 CONNECTED";
+                btn.className = "active";
+            } catch (e) {
+                alert("Error: Ensure T10 is paired in your phone Bluetooth settings first.");
+            }
         }
 
-        async function move(leftSpeed, rightSpeed) {
+        async function drive(l, r) {
             if (!writer) return;
-            // Port A = 0x01, Port D = 0x08. Both A+D = 0x09
-            const l = leftSpeed & 0xFF;
-            const r = rightSpeed & 0xFF;
-            
-            // Direct Command: OutputSpeed on Ports A (0x01) and D (0x08)
-            const cmd = new Uint8Array([
-                0x0F, 0x00, // Length
-                0x00, 0x00, // Msg Counter
-                0x80,       // No Reply
-                0x00, 0x00, // Local/Global mem
-                0xA2, 0x00, 0x01, 0x81, r, // Set Speed Motor A
-                0xA2, 0x00, 0x08, 0x81, l, // Set Speed Motor D
-                0xA6, 0x00, 0x09            // Start Motors A+D
+            // Map values to unsigned bytes
+            const uL = l < 0 ? (256 + l) : l;
+            const uR = r < 0 ? (256 + r) : r;
+
+            // Direct Command: Set Speed (A=0x01, D=0x08), Start (A+D=0x09)
+            const pkt = new Uint8Array([
+                0x0F, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, 
+                0xA2, 0x00, 0x01, 0x81, uR, // Motor A Right
+                0xA2, 0x00, 0x08, 0x81, uL, // Motor D Left
+                0xA6, 0x00, 0x09             // Start both
             ]);
-            await writer.write(cmd);
+            await writer.write(pkt);
         }
 
         async function stop() {
             if (!writer) return;
-            const cmd = new Uint8Array([0x09, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0xA3, 0x00, 0x09, 0x01]);
-            await writer.write(cmd);
+            // Stop Command for A+D (0x09)
+            const pkt = new Uint8Array([0x09, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, 0xA3, 0x00, 0x09, 0x01]);
+            await writer.write(pkt);
         }
     </script>
 </body>
