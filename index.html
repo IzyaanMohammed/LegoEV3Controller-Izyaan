@@ -1,31 +1,25 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>T10 EV3 Controller</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>T10 ALL-ACCESS</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { text-align: center; font-family: sans-serif; background: #1a1a1a; color: #00ff00; margin: 0; overflow: hidden; }
-        h2 { margin-top: 20px; text-shadow: 0 0 10px #00ff00; }
-        .status-bar { margin: 10px; font-size: 14px; color: #aaa; }
-        #conn { background: #008cff; color: white; border: none; padding: 15px 30px; font-size: 18px; border-radius: 50px; cursor: pointer; box-shadow: 0 4px #005bb5; margin-bottom: 30px; }
-        #conn.active { background: #28a745; box-shadow: 0 4px #1e7e34; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; width: 280px; margin: auto; }
-        .btn { width: 80px; height: 80px; background: #333; border: 2px solid #00ff00; color: #00ff00; font-size: 20px; font-weight: bold; border-radius: 15px; display: flex; align-items: center; justify-content: center; user-select: none; -webkit-user-select: none; }
-        .btn:active { background: #00ff00; color: black; }
-        .label { grid-column: span 3; color: #888; font-size: 12px; margin-top: 10px; }
+        body { text-align: center; font-family: sans-serif; background: #000; color: #0f0; }
+        #conn { background: #f00; color: #fff; padding: 20px; width: 80%; font-size: 20px; border-radius: 10px; border: none; margin: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); width: 300px; margin: auto; gap: 10px; }
+        .btn { height: 80px; background: #333; color: #0f0; border: 2px solid #0f0; font-size: 25px; display: flex; align-items: center; justify-content: center; border-radius: 15px; }
+        .btn:active { background: #0f0; color: #000; }
     </style>
 </head>
 <body>
-    <h2>ROBOT T10</h2>
-    <div class="status-bar">Target: Motor A (Right) + Motor D (Left)</div>
-    <button id="conn" onclick="connect()">CONNECT T10</button>
+    <h2>EV3: T10</h2>
+    <button id="conn" onclick="connect()">SEARCH ALL DEVICES</button>
 
     <div class="grid">
         <div></div><div class="btn" onpointerdown="drive(50,50)" onpointerup="stop()">↑</div><div></div>
         <div class="btn" onpointerdown="drive(-40,40)" onpointerup="stop()">←</div>
         <div class="btn" onpointerdown="drive(-50,-50)" onpointerup="stop()">↓</div>
         <div class="btn" onpointerdown="drive(40,-40)" onpointerup="stop()">→</div>
-        <div class="label">Bluetooth Classic | Web Serial Mode</div>
     </div>
 
     <script>
@@ -33,40 +27,28 @@
 
         async function connect() {
             try {
-                // Request port with standard Bluetooth Serial UUID
-                port = await navigator.serial.requestPort({
-                    filters: [{ bluetoothServiceClassId: "00001101-0000-1000-8000-00805f9b34fb" }]
-                });
+                // REMOVED ALL FILTERS: This will show every possible device
+                port = await navigator.serial.requestPort(); 
                 await port.open({ baudRate: 9600 });
                 writer = port.writable.getWriter();
-                const btn = document.getElementById('conn');
-                btn.innerText = "T10 CONNECTED";
-                btn.className = "active";
+                document.getElementById('conn').innerText = "T10 ONLINE";
+                document.getElementById('conn').style.background = "#008800";
             } catch (e) {
-                alert("Error: Ensure T10 is paired in your phone Bluetooth settings first.");
+                alert("STILL NOT SHOWING? 1. Go to chrome://flags 2. Enable 'Experimental Web Platform features' 3. Restart Chrome.");
             }
         }
 
         async function drive(l, r) {
             if (!writer) return;
-            // Map values to unsigned bytes
             const uL = l < 0 ? (256 + l) : l;
             const uR = r < 0 ? (256 + r) : r;
-
-            // Direct Command: Set Speed (A=0x01, D=0x08), Start (A+D=0x09)
-            const pkt = new Uint8Array([
-                0x0F, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, 
-                0xA2, 0x00, 0x01, 0x81, uR, // Motor A Right
-                0xA2, 0x00, 0x08, 0x81, uL, // Motor D Left
-                0xA6, 0x00, 0x09             // Start both
-            ]);
+            const pkt = new Uint8Array([0x0F,0x00,0x01,0x00,0x80,0x00,0x00,0xA2,0x00,0x01,0x81,uR,0xA2,0x00,0x08,0x81,uL,0xA6,0x00,0x09]);
             await writer.write(pkt);
         }
 
         async function stop() {
             if (!writer) return;
-            // Stop Command for A+D (0x09)
-            const pkt = new Uint8Array([0x09, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, 0xA3, 0x00, 0x09, 0x01]);
+            const pkt = new Uint8Array([0x09,0x00,0x01,0x00,0x80,0x00,0x00,0xA3,0x00,0x09,0x01]);
             await writer.write(pkt);
         }
     </script>
