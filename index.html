@@ -1,25 +1,25 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>T10 ALL-ACCESS</title>
+    <title>T10 A+D FIXED</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { text-align: center; font-family: sans-serif; background: #000; color: #0f0; }
-        #conn { background: #f00; color: #fff; padding: 20px; width: 80%; font-size: 20px; border-radius: 10px; border: none; margin: 20px; }
+        body { text-align: center; font-family: sans-serif; background: #000; color: #fff; }
+        #conn { background: #007bff; color: #fff; padding: 20px; width: 80%; font-size: 20px; border-radius: 10px; border: none; margin: 20px; }
         .grid { display: grid; grid-template-columns: repeat(3, 1fr); width: 300px; margin: auto; gap: 10px; }
-        .btn { height: 80px; background: #333; color: #0f0; border: 2px solid #0f0; font-size: 25px; display: flex; align-items: center; justify-content: center; border-radius: 15px; }
+        .btn { height: 90px; background: #333; color: #0f0; border: 2px solid #0f0; font-size: 25px; display: flex; align-items: center; justify-content: center; border-radius: 15px; user-select: none; -webkit-user-select: none; }
         .btn:active { background: #0f0; color: #000; }
     </style>
 </head>
 <body>
-    <h2>EV3: T10</h2>
-    <button id="conn" onclick="connect()">SEARCH ALL DEVICES</button>
+    <h2>T10 CONTROLLER</h2>
+    <button id="conn" onclick="connect()">CONNECT TO T10</button>
 
     <div class="grid">
-        <div></div><div class="btn" onpointerdown="drive(50,50)" onpointerup="stop()">↑</div><div></div>
-        <div class="btn" onpointerdown="drive(-40,40)" onpointerup="stop()">←</div>
-        <div class="btn" onpointerdown="drive(-50,-50)" onpointerup="stop()">↓</div>
-        <div class="btn" onpointerdown="drive(40,-40)" onpointerup="stop()">→</div>
+        <div></div><div class="btn" onpointerdown="move(60,60)" onpointerup="stop()">↑</div><div></div>
+        <div class="btn" onpointerdown="move(-40,40)" onpointerup="stop()">←</div>
+        <div class="btn" onpointerdown="move(-60,-60)" onpointerup="stop()">↓</div>
+        <div class="btn" onpointerdown="move(40,-40)" onpointerup="stop()">→</div>
     </div>
 
     <script>
@@ -27,28 +27,43 @@
 
         async function connect() {
             try {
-                // REMOVED ALL FILTERS: This will show every possible device
-                port = await navigator.serial.requestPort(); 
+                port = await navigator.serial.requestPort();
                 await port.open({ baudRate: 9600 });
                 writer = port.writable.getWriter();
-                document.getElementById('conn').innerText = "T10 ONLINE";
-                document.getElementById('conn').style.background = "#008800";
-            } catch (e) {
-                alert("STILL NOT SHOWING? 1. Go to chrome://flags 2. Enable 'Experimental Web Platform features' 3. Restart Chrome.");
-            }
+                document.getElementById('conn').innerText = "ONLINE";
+                document.getElementById('conn').style.background = "green";
+            } catch (e) { alert("Pair T10 in phone settings first!"); }
         }
 
-        async function drive(l, r) {
+        async function move(l, r) {
             if (!writer) return;
+            // Convert to 2's complement for negative speed
             const uL = l < 0 ? (256 + l) : l;
             const uR = r < 0 ? (256 + r) : r;
-            const pkt = new Uint8Array([0x0F,0x00,0x01,0x00,0x80,0x00,0x00,0xA2,0x00,0x01,0x81,uR,0xA2,0x00,0x08,0x81,uL,0xA6,0x00,0x09]);
+
+            // PACKET BREAKDOWN:
+            // 0x11, 0x00: Length (17 bytes)
+            // 0x00, 0x00: Msg Count
+            // 0x80: No reply needed
+            // 0x00, 0x00: Local/Global memory
+            // 0xA2, 0x00: opOutput_Speed, Layer 0
+            // 0x09: Port Mask (Port A=1 + Port D=8 = 9)
+            // 0x81, uL: Left Motor Speed (D)
+            // 0xA2, 0x00, 0x09, 0x81, uR: Right Motor Speed (A) -- Using same mask for simplicity
+            // 0xA6, 0x00, 0x09: opOutput_Start (Actually starts the movement)
+            
+            const pkt = new Uint8Array([
+                0x0D, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00,
+                0xA2, 0x00, 0x09, 0x81, uL, // Setting Speed for both A+D
+                0xA6, 0x00, 0x09             // START both
+            ]);
             await writer.write(pkt);
         }
 
         async function stop() {
             if (!writer) return;
-            const pkt = new Uint8Array([0x09,0x00,0x01,0x00,0x80,0x00,0x00,0xA3,0x00,0x09,0x01]);
+            // 0xA3: opOutput_Stop, 0x09: Ports A+D, 0x01: Brake
+            const pkt = new Uint8Array([0x09, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0xA3, 0x00, 0x09, 0x01]);
             await writer.write(pkt);
         }
     </script>
