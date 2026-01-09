@@ -1,26 +1,33 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>T10 Debugger</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>T10 EV3 COMMANDER</title>
     <style>
-        body { text-align: center; font-family: monospace; background: #000; color: #0f0; margin: 0; }
-        #log { height: 120px; background: #222; overflow-y: scroll; padding: 10px; font-size: 12px; text-align: left; border-bottom: 2px solid #0f0; }
-        .grid { display: grid; grid-template-columns: repeat(3, 1fr); width: 300px; margin: 20px auto; gap: 10px; }
-        .btn { height: 70px; background: #333; color: #0f0; border: 2px solid #0f0; font-size: 20px; display: flex; align-items: center; justify-content: center; }
-        button#conn { width: 90%; padding: 15px; margin: 10px; background: #0055ff; color: white; border: none; }
+        body { text-align: center; font-family: 'Courier New', monospace; background: #000; color: #0f0; margin: 0; padding: 10px; }
+        #log { height: 100px; background: #111; overflow-y: scroll; padding: 10px; font-size: 11px; text-align: left; border: 1px solid #333; margin-bottom: 10px; color: #0fa; }
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); width: 280px; margin: 20px auto; gap: 15px; }
+        .btn { height: 80px; background: #222; color: #0f0; border: 2px solid #0f0; font-size: 30px; display: flex; align-items: center; justify-content: center; border-radius: 15px; user-select: none; touch-action: none; }
+        .btn:active { background: #0f0; color: #000; box-shadow: 0 0 20px #0f0; }
+        #conn { width: 100%; padding: 15px; background: #0055ff; color: white; border: none; font-weight: bold; border-radius: 5px; margin-bottom: 10px; cursor: pointer; }
+        .active { background: #28a745 !important; }
     </style>
 </head>
 <body>
-    <div id="log">--- Debug Log Ready ---<br></div>
+
+    <div id="log">READY: Pair T10 first, then click Connect.</div>
+    
     <button id="conn" onclick="connect()">CONNECT TO T10</button>
 
     <div class="grid">
-        <div></div><div class="btn" onpointerdown="drive(50,50)" onpointerup="stop()">↑</div><div></div>
-        <div class="btn" onpointerdown="drive(-40,40)" onpointerup="stop()">←</div>
-        <div class="btn" onpointerdown="drive(-50,-50)" onpointerup="stop()">↓</div>
-        <div class="btn" onpointerdown="drive(40,-40)" onpointerup="stop()">→</div>
+        <div></div><div class="btn" onpointerdown="drive(60,60)" onpointerup="stop()">↑</div><div></div>
+        <div class="btn" onpointerdown="drive(-50,50)" onpointerup="stop()">←</div>
+        <div class="btn" onpointerdown="drive(-60,-60)" onpointerup="stop()">↓</div>
+        <div class="btn" onpointerdown="drive(50,-50)" onpointerup="stop()">→</div>
     </div>
+
+    <p style="font-size: 10px; color: #666;">MOTORS: A (Right) | D (Left)<br>PROTOCOL: BT CLASSIC RFCOMM</p>
 
     <script>
         let port, writer;
@@ -30,54 +37,69 @@
             const l = document.getElementById('log');
             l.innerHTML += "> " + msg + "<br>";
             l.scrollTop = l.scrollHeight;
-            console.log(msg);
         }
 
         async function connect() {
             try {
-                debug("Requesting Port...");
+                debug("Opening Serial Picker...");
                 port = await navigator.serial.requestPort();
-                debug("Opening Port at 9600...");
                 await port.open({ baudRate: 9600 });
                 writer = port.writable.getWriter();
-                debug("SUCCESS: Writer locked and ready.");
-                document.getElementById('conn').style.background = "green";
+                debug("CONNECTED TO T10");
+                document.getElementById('conn').innerText = "T10 ONLINE";
+                document.getElementById('conn').classList.add('active');
             } catch (e) {
-                debug("ERROR: " + e.message);
+                debug("CONN ERROR: " + e.message);
+                alert("Make sure 'Experimental Web Platform Features' is enabled in chrome://flags");
             }
         }
 
         async function drive(l, r) {
-            if (!writer) { debug("SKIP: Not connected"); return; }
+            if (!writer) return;
             msgCount++;
-            
-            // Format bytes for Motor A (0x01) and D (0x08)
-            const uL = l < 0 ? (256 + l) : l;
-            const uR = r < 0 ? (256 + r) : r;
 
-            // Direct Command (13 bytes total following length)
+            // Port Mask: A(1) + D(8) = 9 (0x09)
+            // Using opOutput_Step_Speed for more reliable execution
+            // Speed bytes: -100 to 100
+            const sL = l & 0xFF;
+            const sR = r & 0xFF;
+
             const pkt = new Uint8Array([
-                0x0D, 0x00,               // Length
-                msgCount & 0xFF, 0x00,    // Counter
-                0x80,                     // No Reply
-                0x00, 0x00,               // Header
-                0xA2, 0x00, 0x09, 0x81, uL, // Speed A+D
-                0xA6, 0x00, 0x09             // Start A+D
+                0x0D, 0x00,               // 1. Length (13 bytes follow)
+                msgCount & 0xFF, 0x00,    // 2. Msg Counter
+                0x80,                     // 3. Type: Direct No Reply
+                0x00, 0x00,               // 4. Header
+                0xA4, 0x00, 0x01, 0x81, sR, // 5. Set Power Motor A (Right)
+                0xA4, 0x00, 0x08, 0x81, sL, // 6. Set Power Motor D (Left)
+                0xA6, 0x00, 0x09             // 7. Start Motors A+D
             ]);
 
             try {
                 await writer.write(pkt);
-                debug("WRITTEN: " + Array.from(pkt).map(b => b.toString(16).padStart(2, '0')).join(' '));
+                debug("DRIVE: L:" + l + " R:" + r);
             } catch (e) {
-                debug("WRITE ERROR: " + e.message);
+                debug("SEND ERROR");
             }
         }
 
         async function stop() {
             if (!writer) return;
-            const pkt = new Uint8Array([0x09, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, 0xA3, 0x00, 0x09, 0x01]);
-            await writer.write(pkt);
-            debug("STOP SENT");
+            msgCount++;
+
+            // opOutput_Stop (0xA3), Ports A+D (0x09), Brake (0x01)
+            const pkt = new Uint8Array([
+                0x09, 0x00,               // 9 bytes follow
+                msgCount & 0xFF, 0x00,    // Msg Counter
+                0x80, 0x00, 0x00,         // Header
+                0xA3, 0x00, 0x09, 0x01    // Stop Command
+            ]);
+
+            try {
+                await writer.write(pkt);
+                debug("STOPPED");
+            } catch (e) {
+                debug("STOP ERROR");
+            }
         }
     </script>
 </body>
