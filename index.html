@@ -1,54 +1,86 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>EV3 RC Controller</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EV3 Universal Controller</title>
     <style>
-        body { text-align: center; font-family: sans-serif; background: #222; color: #fff; touch-action: manipulation; }
-        .grid { display: grid; grid-template-columns: 100px 100px 100px; gap: 10px; justify-content: center; margin-top: 20px; }
-        button { 
-            width: 100px; height: 100px; font-size: 1.2rem; font-weight: bold;
-            border-radius: 15px; border: none; color: white; cursor: pointer;
+        body { 
+            text-align: center; font-family: sans-serif; background: #1a1a1a; color: #fff; 
+            touch-action: none; /* Disables browser-level zooming/scrolling on buttons */
             user-select: none; -webkit-user-select: none;
+        }
+        .grid { display: grid; grid-template-columns: 100px 100px 100px; gap: 15px; justify-content: center; margin-top: 50px; }
+        button {  
+            width: 100px; height: 100px; font-size: 1.2rem; font-weight: bold;
+            border-radius: 20px; border: none; color: white; cursor: pointer;
+            box-shadow: 0 4px #999; outline: none;
         }
         .btn-f { background: #4CAF50; grid-column: 2; }
         .btn-l { background: #2196F3; grid-column: 1; }
         .btn-r { background: #FF9800; grid-column: 3; }
         .btn-b { background: #f44336; grid-column: 2; }
-        button:active { filter: brightness(1.5); transform: scale(0.95); }
+        
+        button:active { 
+            filter: brightness(1.3); 
+            transform: translateY(4px);
+            box-shadow: 0 0px #666;
+        }
+        select { padding: 10px; margin-top: 20px; border-radius: 5px; font-size: 1rem; }
     </style>
 </head>
 <body>
-    <h1>EV3 RC Mode</h1>
+    <h1>EV3 RC PRO</h1>
     <select id="ev3Select"><option value="ev3_1">EV3 1</option></select>
     
     <div class="grid">
-        <button class="btn-f" onmousedown="sendCmd('F')" onmouseup="sendCmd('S')" ontouchstart="sendCmd('F')" ontouchend="sendCmd('S')">UP</button>
-        <button class="btn-l" onmousedown="sendCmd('L')" onmouseup="sendCmd('S')" ontouchstart="sendCmd('L')" ontouchend="sendCmd('S')">LEFT</button>
-        <button class="btn-r" onmousedown="sendCmd('R')" onmouseup="sendCmd('S')" ontouchstart="sendCmd('R')" ontouchend="sendCmd('S')">RIGHT</button>
-        <button class="btn-b" onmousedown="sendCmd('B')" onmouseup="sendCmd('S')" ontouchstart="sendCmd('B')" ontouchend="sendCmd('S')">DOWN</button>
+        <button class="btn-f" data-cmd="F">UP</button>
+        <button class="btn-l" data-cmd="L">LEFT</button>
+        <button class="btn-r" data-cmd="R">RIGHT</button>
+        <button class="btn-b" data-cmd="B">DOWN</button>
     </div>
 
     <script>
         const EV3_URL = "http://192.168.1.114:5000/move"; 
-        let lastCmd = ""; // Track state to stop spamming
+        let lastCmd = ""; 
 
-        function sendCmd(cmd) {
-            // 2️⃣ Only send if the command is different from the last one sent
+        async function sendCmd(cmd, event) {
+            // Stop iOS from triggering zoom or "magnifying glass"
+            if (event && event.cancelable) event.preventDefault();
+
+            // 2️⃣ Stop spamming: Only send if the command changed
             if (cmd === lastCmd) return;
             lastCmd = cmd;
 
             const ev3_id = document.getElementById("ev3Select").value;
-            fetch(EV3_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ev3_id: ev3_id, command: cmd })
-            }).catch(err => {
-                console.error("Link Down");
-                lastCmd = ""; // Reset on error to allow retry
-            });
+            
+            try {
+                await fetch(EV3_URL, {
+                    method: "POST",
+                    mode: "cors", // Explicitly handle Apple CORS requirements
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ev3_id: ev3_id, command: cmd })
+                });
+            } catch (err) {
+                console.error("Connection lost");
+                lastCmd = ""; // Reset on error so we can retry
+            }
         }
+
+        // Attach listeners manually to handle iOS/Android/PC differences
+        document.querySelectorAll('button').forEach(btn => {
+            const cmd = btn.getAttribute('data-cmd');
+
+            // --- START MOVEMENT ---
+            btn.addEventListener('touchstart', (e) => sendCmd(cmd, e), { passive: false });
+            btn.addEventListener('mousedown', (e) => sendCmd(cmd, e));
+
+            // --- STOP MOVEMENT ---
+            const stopActions = ['touchend', 'touchcancel', 'mouseup', 'mouseleave'];
+            stopActions.forEach(action => {
+                btn.addEventListener(action, (e) => sendCmd('S', e), { passive: false });
+            });
+        });
     </script>
 </body>
 </html>
