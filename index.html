@@ -1,71 +1,37 @@
 <!DOCTYPE html>
 <html>
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EV3 Multi Controller</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>EV3 RC Controller</title>
     <style>
-        body {
-            text-align: center;
-            font-family: sans-serif;
-            background: #222;
-            color: #fff;
+        body { text-align: center; font-family: sans-serif; background: #222; color: #fff; touch-action: manipulation; }
+        .grid { display: grid; grid-template-columns: 100px 100px 100px; gap: 10px; justify-content: center; margin-top: 20px; }
+        button { 
+            width: 100px; height: 100px; font-size: 1.2rem; font-weight: bold;
+            border-radius: 15px; border: none; color: white; cursor: pointer;
+            user-select: none; -webkit-user-select: none;
         }
-
-        h1 {
-            margin-top: 20px;
-        }
-
-        select,
-        button {
-            font-size: 1.5rem;
-            padding: 10px 20px;
-            margin: 5px;
-            border-radius: 8px;
-        }
-
-        .forward {
-            background: #4CAF50;
-        }
-
-        .back {
-            background: #f44336;
-        }
-
-        .left {
-            background: #2196F3;
-        }
-
-        .right {
-            background: #FF9800;
-        }
-
-        .stop {
-            background: #9E9E9E;
-        }
+        .btn-f { background: #4CAF50; grid-column: 2; }
+        .btn-l { background: #2196F3; grid-column: 1; }
+        .btn-r { background: #FF9800; grid-column: 3; }
+        .btn-b { background: #f44336; grid-column: 2; }
+        button:active { filter: brightness(1.5); transform: scale(0.95); }
     </style>
 </head>
-
 <body>
-    <h1>EV3 Controller</h1>
-    <label>Select EV3:</label>
-    <select id="ev3Select">
-        <option value="ev3_1">EV3 1</option>
-        <option value="ev3_2">EV3 2</option>
-        <option value="ev3_3">EV3 3</option>
-        <option value="ev3_4">EV3 4</option>
-    </select>
-    <div>
-        <button class="forward" onclick="sendCmd('F')">Forward</button><br>
-        <button class="left" onclick="sendCmd('L')">Left</button>
-        <button class="stop" onclick="sendCmd('S')">Stop</button>
-        <button class="right" onclick="sendCmd('R')">Right</button><br>
-        <button class="back" onclick="sendCmd('B')">Backward</button>
+    <h1>EV3 RC Mode</h1>
+    <select id="ev3Select"><option value="ev3_1">EV3 1</option></select>
+    
+    <div class="grid">
+        <button class="btn-f" onmousedown="sendCmd('F')" onmouseup="sendCmd('S')" ontouchstart="sendCmd('F')" ontouchend="sendCmd('S')">UP</button>
+        <button class="btn-l" onmousedown="sendCmd('L')" onmouseup="sendCmd('S')" ontouchstart="sendCmd('L')" ontouchend="sendCmd('S')">LEFT</button>
+        <button class="btn-r" onmousedown="sendCmd('R')" onmouseup="sendCmd('S')" ontouchstart="sendCmd('R')" ontouchend="sendCmd('S')">RIGHT</button>
+        <button class="btn-b" onmousedown="sendCmd('B')" onmouseup="sendCmd('S')" ontouchstart="sendCmd('B')" ontouchend="sendCmd('S')">DOWN</button>
     </div>
 
     <script>
-        const EV3_URL = "http://192.168.1.114:5000/move"; // <-- Replace with your laptop IP
+        const EV3_URL = "http://192.168.1.114:5000/move"; // Update to your Laptop IP
 
         function sendCmd(cmd) {
             const ev3_id = document.getElementById("ev3Select").value;
@@ -73,12 +39,8 @@
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ ev3_id: ev3_id, command: cmd })
-            })
-                .then(res => res.json())
-                .then(data => console.log(data))
-                .catch(err => console.error(err));
+            }).catch(err => console.error("Link Down"));
         }
     </script>
 </body>
-
 </html>
