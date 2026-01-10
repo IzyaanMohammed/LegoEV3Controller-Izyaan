@@ -3,30 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EV3 Universal Controller</title>
+    <title>EV3 Universal</title>
     <style>
         body { 
-            text-align: center; font-family: sans-serif; background: #1a1a1a; color: #fff; 
-            touch-action: none; /* Disables browser-level zooming/scrolling on buttons */
-            user-select: none; -webkit-user-select: none;
+            text-align: center; font-family: sans-serif; background: #111; color: #fff; 
+            touch-action: none; user-select: none; -webkit-user-select: none;
         }
         .grid { display: grid; grid-template-columns: 100px 100px 100px; gap: 15px; justify-content: center; margin-top: 50px; }
         button {  
             width: 100px; height: 100px; font-size: 1.2rem; font-weight: bold;
-            border-radius: 20px; border: none; color: white; cursor: pointer;
-            box-shadow: 0 4px #999; outline: none;
+            border-radius: 20px; border: none; color: white; background: #444;
         }
         .btn-f { background: #4CAF50; grid-column: 2; }
         .btn-l { background: #2196F3; grid-column: 1; }
         .btn-r { background: #FF9800; grid-column: 3; }
         .btn-b { background: #f44336; grid-column: 2; }
-        
-        button:active { 
-            filter: brightness(1.3); 
-            transform: translateY(4px);
-            box-shadow: 0 0px #666;
-        }
-        select { padding: 10px; margin-top: 20px; border-radius: 5px; font-size: 1rem; }
+        button:active { opacity: 0.7; }
     </style>
 </head>
 <body>
@@ -34,51 +26,51 @@
     <select id="ev3Select"><option value="ev3_1">EV3 1</option></select>
     
     <div class="grid">
-        <button class="btn-f" data-cmd="F">UP</button>
-        <button class="btn-l" data-cmd="L">LEFT</button>
-        <button class="btn-r" data-cmd="R">RIGHT</button>
-        <button class="btn-b" data-cmd="B">DOWN</button>
+        <button class="btn-f" id="F">UP</button>
+        <button class="btn-l" id="L">LEFT</button>
+        <button class="btn-r" id="R">RIGHT</button>
+        <button class="btn-b" id="B">DOWN</button>
     </div>
 
     <script>
         const EV3_URL = "http://192.168.1.114:5000/move"; 
         let lastCmd = ""; 
 
-        async function sendCmd(cmd, event) {
-            // Stop iOS from triggering zoom or "magnifying glass"
-            if (event && event.cancelable) event.preventDefault();
-
-            // 2️⃣ Stop spamming: Only send if the command changed
+        // 1. Force the fetch to be extremely simple for iOS
+        async function sendRequest(cmd) {
             if (cmd === lastCmd) return;
             lastCmd = cmd;
 
             const ev3_id = document.getElementById("ev3Select").value;
             
             try {
+                // Using 'no-cors' can sometimes help with simple commands on iOS 
+                // but 'cors' is better if the server is configured right (see below)
                 await fetch(EV3_URL, {
                     method: "POST",
-                    mode: "cors", // Explicitly handle Apple CORS requirements
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ ev3_id: ev3_id, command: cmd })
                 });
             } catch (err) {
-                console.error("Connection lost");
-                lastCmd = ""; // Reset on error so we can retry
+                console.log("Error");
+                lastCmd = "";
             }
         }
 
-        // Attach listeners manually to handle iOS/Android/PC differences
+        // 2. Use Pointer Events (Universal for iOS/Android/PC)
         document.querySelectorAll('button').forEach(btn => {
-            const cmd = btn.getAttribute('data-cmd');
+            // "pointerdown" handles both touch and click instantly on iOS
+            btn.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                sendRequest(btn.id);
+            });
 
-            // --- START MOVEMENT ---
-            btn.addEventListener('touchstart', (e) => sendCmd(cmd, e), { passive: false });
-            btn.addEventListener('mousedown', (e) => sendCmd(cmd, e));
-
-            // --- STOP MOVEMENT ---
-            const stopActions = ['touchend', 'touchcancel', 'mouseup', 'mouseleave'];
-            stopActions.forEach(action => {
-                btn.addEventListener(action, (e) => sendCmd('S', e), { passive: false });
+            // "pointerup" and "pointerleave" ensure it stops even if finger slides off
+            ['pointerup', 'pointerleave', 'pointercancel'].forEach(evt => {
+                btn.addEventListener(evt, (e) => {
+                    e.preventDefault();
+                    sendRequest('S');
+                });
             });
         });
     </script>
