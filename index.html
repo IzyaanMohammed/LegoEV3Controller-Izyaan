@@ -1,54 +1,174 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>EV3 RC Controller</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EV3 iOS-Ready Controller</title>
     <style>
-        body { text-align: center; font-family: sans-serif; background: #222; color: #fff; touch-action: manipulation; }
-        .grid { display: grid; grid-template-columns: 100px 100px 100px; gap: 10px; justify-content: center; margin-top: 20px; }
-        button { 
-            width: 100px; height: 100px; font-size: 1.2rem; font-weight: bold;
-            border-radius: 15px; border: none; color: white; cursor: pointer;
-            user-select: none; -webkit-user-select: none;
+        body { 
+            text-align: center; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: #1a1a1a; 
+            color: #fff; 
+            margin: 0;
+            padding: 20px;
+            /* Prevents the whole page from bouncing/scrolling on iOS */
+            overflow: hidden;
+            touch-action: none; 
         }
-        .btn-f { background: #4CAF50; grid-column: 2; }
-        .btn-l { background: #2196F3; grid-column: 1; }
-        .btn-r { background: #FF9800; grid-column: 3; }
-        .btn-b { background: #f44336; grid-column: 2; }
-        button:active { filter: brightness(1.5); transform: scale(0.95); }
+
+        h1 { margin-bottom: 10px; font-size: 1.5rem; }
+
+        select {
+            background: #333;
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            width: 80%;
+            max-width: 300px;
+        }
+
+        .grid { 
+            display: grid; 
+            grid-template-columns: repeat(3, 90px); 
+            grid-template-rows: repeat(3, 90px);
+            gap: 15px; 
+            justify-content: center; 
+            margin-top: 10px; 
+        }
+
+        button { 
+            width: 90px; 
+            height: 90px; 
+            font-size: 1rem; 
+            font-weight: bold;
+            border-radius: 20px; 
+            border: none; 
+            color: white; 
+            cursor: pointer;
+            /* CRITICAL FOR iOS */
+            user-select: none; 
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: none;
+            transition: transform 0.1s;
+        }
+
+        .btn-f { background: #4CAF50; grid-column: 2; grid-row: 1; }
+        .btn-l { background: #2196F3; grid-column: 1; grid-row: 2; }
+        .btn-r { background: #FF9800; grid-column: 3; grid-row: 2; }
+        .btn-b { background: #f44336; grid-column: 2; grid-row: 3; }
+
+        button:active { 
+            filter: brightness(1.3); 
+            transform: scale(0.92); 
+        }
+
+        #status-box {
+            margin-top: 30px;
+            padding: 10px;
+            background: #000;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #0f0;
+            min-height: 40px;
+            border: 1px solid #333;
+        }
     </style>
 </head>
 <body>
-    <h1>EV3 RC Mode</h1>
-    <select id="ev3Select"><option value="ev3_1">EV3 1</option></select>
+
+    <h1>EV3 RC CONTROL</h1>
     
+    <select id="ev3Select">
+        <option value="ev3_1">EV3 1 (00:16:53...)</option>
+    </select>
+
     <div class="grid">
-        <button class="btn-f" onmousedown="sendCmd('F')" onmouseup="sendCmd('S')" ontouchstart="sendCmd('F')" ontouchend="sendCmd('S')">UP</button>
-        <button class="btn-l" onmousedown="sendCmd('L')" onmouseup="sendCmd('S')" ontouchstart="sendCmd('L')" ontouchend="sendCmd('S')">LEFT</button>
-        <button class="btn-r" onmousedown="sendCmd('R')" onmouseup="sendCmd('S')" ontouchstart="sendCmd('R')" ontouchend="sendCmd('S')">RIGHT</button>
-        <button class="btn-b" onmousedown="sendCmd('B')" onmouseup="sendCmd('S')" ontouchstart="sendCmd('B')" ontouchend="sendCmd('S')">DOWN</button>
+        <button class="control-btn btn-f" data-cmd="F">UP</button>
+        <button class="control-btn btn-l" data-cmd="L">LEFT</button>
+        <button class="control-btn btn-r" data-cmd="R">RIGHT</button>
+        <button class="control-btn btn-b" data-cmd="B">DOWN</button>
     </div>
 
-    <script>
-        const EV3_URL = "http://192.168.1.114:5000/move"; 
-        let lastCmd = ""; // Track state to stop spamming
+    <div id="status-box">System Initialized. Waiting for input...</div>
 
-        function sendCmd(cmd) {
-            // 2️⃣ Only send if the command is different from the last one sent
-            if (cmd === lastCmd) return;
-            lastCmd = cmd;
+<script>
+    // --- CONFIGURATION ---
+    const EV3_URL = "http://192.168.1.114:5000/move"; 
+    const statusBox = document.getElementById("status-box");
+    let lastCmd = "";
 
-            const ev3_id = document.getElementById("ev3Select").value;
-            fetch(EV3_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ev3_id: ev3_id, command: cmd })
-            }).catch(err => {
-                console.error("Link Down");
-                lastCmd = ""; // Reset on error to allow retry
-            });
+    function updateLog(msg) {
+        statusBox.innerText = msg;
+    }
+
+    function sendCmd(cmd) {
+        // Prevent duplicate commands to save bandwidth/lag
+        if (cmd === lastCmd) return;
+        lastCmd = cmd;
+        
+        const ev3_id = document.getElementById("ev3Select").value;
+        updateLog(`Action: ${cmd}...`);
+
+        fetch(EV3_URL, {
+            method: "POST",
+            mode: 'cors', // Explicitly enable CORS
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ev3_id: ev3_id, command: cmd })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            updateLog(`Executed: ${cmd}`);
+        })
+        .catch(err => {
+            updateLog(`Error: ${err.message}`);
+            lastCmd = ""; // Reset on error so we can try again
+        });
+    }
+
+    // --- EVENT LISTENERS ---
+    const buttons = document.querySelectorAll('.control-btn');
+
+    buttons.forEach(btn => {
+        const cmd = btn.getAttribute('data-cmd');
+
+        // 1. TOUCH EVENTS (For iOS Safari)
+        btn.addEventListener('touchstart', (e) => {
+            // Prevent iOS from showing context menus or zooming
+            if (e.cancelable) e.preventDefault(); 
+            sendCmd(cmd);
+        }, { passive: false });
+
+        btn.addEventListener('touchend', (e) => {
+            if (e.cancelable) e.preventDefault();
+            sendCmd('S');
+        }, { passive: false });
+
+        btn.addEventListener('touchcancel', (e) => {
+            sendCmd('S');
+        }, { passive: false });
+
+        // 2. MOUSE EVENTS (For PC/Mac)
+        btn.addEventListener('mousedown', () => {
+            sendCmd(cmd);
+        });
+
+        btn.addEventListener('mouseup', () => {
+            sendCmd('S');
+        });
+    });
+
+    // 3. GLOBAL PREVENTIONS
+    // Prevents accidental pull-to-refresh or swipe-to-navigate
+    document.addEventListener('touchmove', (e) => {
+        if (e.target.tagName !== 'SELECT') {
+            e.preventDefault();
         }
-    </script>
+    }, { passive: false });
+
+</script>
 </body>
 </html>
