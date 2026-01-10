@@ -31,15 +31,23 @@
     </div>
 
     <script>
-        const EV3_URL = "http://192.168.1.114:5000/move"; // Update to your Laptop IP
+        const EV3_URL = "http://192.168.1.114:5000/move"; 
+        let lastCmd = ""; // Track state to stop spamming
 
         function sendCmd(cmd) {
+            // 2️⃣ Only send if the command is different from the last one sent
+            if (cmd === lastCmd) return;
+            lastCmd = cmd;
+
             const ev3_id = document.getElementById("ev3Select").value;
             fetch(EV3_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ ev3_id: ev3_id, command: cmd })
-            }).catch(err => console.error("Link Down"));
+            }).catch(err => {
+                console.error("Link Down");
+                lastCmd = ""; // Reset on error to allow retry
+            });
         }
     </script>
 </body>
