@@ -7,7 +7,7 @@
     <style>
         body { text-align: center; font-family: sans-serif; background: #111; color: #fff; touch-action: none; user-select: none; -webkit-user-select: none; }
         .grid { display: grid; grid-template-columns: 100px 100px 100px; gap: 15px; justify-content: center; margin-top: 50px; }
-        button { width: 100px; height: 100px; font-size: 1.2rem; font-weight: bold; border-radius: 20px; border: none; color: white; background: #444; touch-action: none; }
+        button { width: 100px; height: 100px; font-size: 1.2rem; font-weight: bold; border-radius: 20px; border: none; color: white; background: #444; }
         .btn-f { background: #4CAF50; grid-column: 2; }
         .btn-l { background: #2196F3; grid-column: 1; }
         .btn-r { background: #FF9800; grid-column: 3; }
@@ -26,7 +26,6 @@
     </div>
 
     <script>
-        // USE THE ACTUAL IP OF YOUR LAPTOP
         const EV3_URL = "http://192.168.1.114:5000/move"; 
         let lastCmd = ""; 
 
@@ -34,41 +33,22 @@
             if (cmd === lastCmd) return;
             lastCmd = cmd;
 
-            const ev3_id = document.getElementById("ev3Select").value;
-            
-            // Log to the phone's console (inspect via Mac if possible)
-            console.log("Attempting:", cmd);
-
             try {
-                const controller = new AbortController();
-                const id = setTimeout(() => controller.abort(), 2000); // 2s timeout
-
                 await fetch(EV3_URL, {
                     method: "POST",
-                    mode: "cors",
-                    headers: { "Content-Type": "text/plain" }, // Use text/plain to avoid some iOS pre-flights
-                    body: JSON.stringify({ ev3_id: ev3_id, command: cmd }),
-                    signal: controller.signal
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ev3_id: document.getElementById("ev3Select").value, command: cmd })
                 });
-                clearTimeout(id);
             } catch (err) {
-                console.error("Fetch failed");
+                console.error("Link Down");
                 lastCmd = "";
             }
         }
 
         document.querySelectorAll('button').forEach(btn => {
-            // PointerEvents work on iOS 13+ and handle touch perfectly
-            btn.addEventListener('pointerdown', (e) => {
-                e.preventDefault();
-                sendRequest(btn.id);
-            });
-
+            btn.addEventListener('pointerdown', (e) => { e.preventDefault(); sendRequest(btn.id); });
             ['pointerup', 'pointerleave', 'pointercancel'].forEach(evt => {
-                btn.addEventListener(evt, (e) => {
-                    e.preventDefault();
-                    sendRequest('S');
-                });
+                btn.addEventListener(evt, (e) => { e.preventDefault(); sendRequest('S'); });
             });
         });
     </script>
